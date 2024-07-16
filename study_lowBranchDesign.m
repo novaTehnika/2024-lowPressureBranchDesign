@@ -43,13 +43,28 @@
 load("data_dominateVelAccel.mat")
 
 %% define system parameters
+% Fluid properties
+par.rho = 1023; % [kg/m3] density of air
+par.mu = 9.4e-4; % [Pa-s]  Dynamic (absolute) viscosity
+par.beta = 2.2e9; % [Pa]  Bulk Modulus of air free fluid
+par.p_vap = 0.037e5; % [Pa] vapour pressure of seawater
+par.R = 0.0001; % [-] fraction  Baseline fraction of air by volume entrained in the hydraulic fluid at atm
+par.p_o = 101.3e3; % [Pa]  Atmospheric pressure (reference)
+par.gamma = 1.4; % [-]ratio of specific heats for air
+
 % WEC-driven pump
 D = 0.23; % pump displacement
 
  % intake check valve of WEC-driven pump
 kv_cv = 0.00048;
-pc_cv = 1e5;
-dp_cv = 1e5;
+pc_cv = 1e4;
+dp_cv = 1e4;
+
+% Piping
+ % intermediate line between WEC-driven pump port and check valve
+L_intermediate = 5; % [m]
+ % intake pipeline
+L_intake = 0; % [m]
 
 % Minor losses in the circuit
  % Long radius, 90-degree bends with flanged fittings
@@ -75,12 +90,76 @@ R_filter = 1e5/0.1; % [Pa/(m^3/s)]
 
 %% study the effect of combined WEC speed and acceleration and sizing of
 % the pipe
-d_pipe = linspace(0.05,0.1,5);
-for i = 1:numel(theta_dot_dom)
-    for j = 1:numel(d_pipe)
-        deltaP_major(i,j) = 0;%[darcyWiesbachEQ];
-        deltaP_minor(i,j) = 0;%[minorLossEQ];
-        deltaP_cv(i,j) = max(dp_cv/(kv_cv*sqrt(pc_cv+dp_cv)*q),(q/kv_cv)^2);
-        deltaP_accel(i,j) = I*D*theta_ddot_dom(i);
+d_pipe = linspace(0.05,0.2,16);
+
+ni = numel(theta_dot_dom);
+nj = numel(d_pipe);
+deltaP_major = zeros(ni,nj);
+deltaP_minor = zeros(ni,nj);
+deltaP_cv = zeros(ni,nj);
+deltaP_accel = zeros(ni,nj);
+deltaP_total = zeros(ni,nj);
+
+for i = 1:ni
+    q = D*theta_dot_dom(i);
+    dq_dt = D*theta_ddot_dom(i);
+    for j = 1:nj
+        A_pipe = pi/4*d_pipe(j)^2;
+        
+        deltaP_major(i,j) = (flowR(q,d_pipe(j),L_intermediate,par) + ...
+                             flowR(q,d_pipe(j),L_intake,par))*q;
+        
+        deltaP_minor(i,j) = k_total*par.rho/2*(q/A_pipe)^2;
+        
+        deltaP_cv(i,j) = max(dp_cv/(kv_cv*sqrt(pc_cv+dp_cv)*q), ...
+                             (q/kv_cv)^2);
+
+        I_intermediate = par.rho*L_intermediate/A_pipe;
+        I_intake = par.rho*L_intake/A_pipe;
+        deltaP_accel(i,j) = (I_intermediate+I_intake)*dq_dt;
+
+        deltaP_total(i,j) = deltaP_major(i,j) + deltaP_minor(i,j) + ...
+                            deltaP_cv(i,j) + deltaP_accel(i,j);
     end
 end
+
+%% acceleration head at peak acceleration
+[~, i] = max(theta_ddot_dom);
+figure
+plot(d_pipe*100,1e-5*deltaP_accel(i,:))
+xlabel('pipe diameter (cm)')
+ylabel('pressure drop (bar)')
+title('Acceleration Pressure Drop at Peak Acceleration')
+
+%% Major and minor losses at peak velocity
+[~, i] = max(theta_dot_dom);
+figure
+plot(d_pipe*100,1e-5*deltaP_major(i,:))
+hold on
+plot(d_pipe*100,1e-5*deltaP_minor(i,:))
+plot(d_pipe*100,1e-5*deltaP_cv(i,:))
+plot(d_pipe*100,1e-5*(deltaP_major(i,:) + ...
+                      deltaP_minor(i,:) + deltaP_cv(i,:)))
+legend('major','minor','check valve','combined')
+xlabel('pipe diameter (cm)')
+ylabel('pressure drop (bar)')
+title('Flow Rate Dependent Pressure Loss at Peak Velocity')
+
+
+%% total pressure drop for all dominate speed and accel
+figure
+for i = 1:ni
+plot(d_pipe*100,1e-5*deltaP_total(i,:))
+hold on
+end
+xlabel('pipe diameter (cm)')
+ylabel('pressure drop (bar)')
+title('Total Pressure Drop')
+
+%% total pressure drop, worst case as func of pipe ID
+max_deltaP = max(deltaP_total,[],1);
+figure
+plot(d_pipe*100,1e-5*max_deltaP)
+xlabel('pipe diameter (cm)')
+ylabel('pressure drop (bar)')
+title('Maximum Total Pressure Drop')
