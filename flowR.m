@@ -59,6 +59,6 @@ else % turbulent flow regime
     f = 0.316*Re^-.25; % Blasius correlation
 end
 % calculate flow resistance coefficient
-R = f*Re*par.mu*L_line/(2*d_line^2*(pi/4*d_line^2));
+R = 2*f*Re*par.mu*L_line/(pi*d_line^4);
 
 end
