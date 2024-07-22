@@ -53,16 +53,16 @@ par.p_o = 101.3e3; % [Pa]  Atmospheric pressure (reference)
 par.gamma = 1.4; % [-]ratio of specific heats for air
 
 % WEC-driven pump
-D = 0.23; % pump displacement
+D = 0.23/2; % pump displacement
 
  % intake check valve of WEC-driven pump
-kv_cv = 0.00048;
+kv_cv = @(ID) 0.0084766*ID^2+0.0000251036*ID; % [m^3/s/Pa^0.5 = f(m)] check valve flow coeff. as a function of nominal pipe ID
 pc_cv = 1e4;
-dp_cv = 1e4;
+dp_cv = 2*pc_cv;
 
 % Piping
  % intermediate line between WEC-driven pump port and check valve
-L_intermediate = 5; % [m]
+L_intermediate = 1; % [m]
  % intake pipeline
 L_intake = 0; % [m]
 
@@ -90,7 +90,7 @@ R_filter = 1e5/0.1; % [Pa/(m^3/s)]
 
 %% study the effect of combined WEC speed and acceleration and sizing of
 % the pipe
-d_pipe = linspace(0.05,0.2,16);
+d_pipe = linspace(0.05,0.4,16);
 
 ni = numel(theta_dot_dom);
 nj = numel(d_pipe);
@@ -99,6 +99,8 @@ deltaP_minor = zeros(ni,nj);
 deltaP_cv = zeros(ni,nj);
 deltaP_accel = zeros(ni,nj);
 deltaP_total = zeros(ni,nj);
+
+cavIndex = zeros(ni,nj);
 
 for i = 1:ni
     q = D*theta_dot_dom(i);
@@ -111,8 +113,10 @@ for i = 1:ni
         
         deltaP_minor(i,j) = k_total*par.rho/2*(q/A_pipe)^2;
         
-        deltaP_cv(i,j) = max(dp_cv/(kv_cv*sqrt(pc_cv+dp_cv)*q), ...
-                             (q/kv_cv)^2);
+        kv = kv_cv(d_pipe(j));
+        deltaP_cv(i,j) = max(dp_cv/(kv*sqrt(pc_cv+dp_cv))*q+pc_cv, ...
+                             (q/kv)^2);
+
 
         I_intermediate = par.rho*L_intermediate/A_pipe;
         I_intake = par.rho*L_intake/A_pipe;
@@ -120,6 +124,12 @@ for i = 1:ni
 
         deltaP_total(i,j) = deltaP_major(i,j) + deltaP_minor(i,j) + ...
                             deltaP_cv(i,j) + deltaP_accel(i,j);
+
+        A_orifice = kv/0.6*sqrt(par.rho/2);
+        p_d = par.p_o - deltaP_total(i,j) ...
+            + k_90degLongRadFlanged*par.rho/2*(q/A_pipe)^2;
+        cavIndex(i,j) = (p_d - par.p_vap)/(1/2*par.rho*((q/A_orifice)^2));
+
     end
 end
 
@@ -134,12 +144,13 @@ title('Acceleration Pressure Drop at Peak Acceleration')
 %% Major and minor losses at peak velocity
 [~, i] = max(theta_dot_dom);
 figure
-plot(d_pipe*100,1e-5*deltaP_major(i,:))
+semilogy(d_pipe*100,1e-5*deltaP_major(i,:))
 hold on
-plot(d_pipe*100,1e-5*deltaP_minor(i,:))
-plot(d_pipe*100,1e-5*deltaP_cv(i,:))
-plot(d_pipe*100,1e-5*(deltaP_major(i,:) + ...
+semilogy(d_pipe*100,1e-5*deltaP_minor(i,:))
+semilogy(d_pipe*100,1e-5*deltaP_cv(i,:))
+semilogy(d_pipe*100,1e-5*(deltaP_major(i,:) + ...
                       deltaP_minor(i,:) + deltaP_cv(i,:)))
+semilogy(d_pipe([1 end])*100,1.03*ones(2,1))
 legend('major','minor','check valve','combined')
 xlabel('pipe diameter (cm)')
 ylabel('pressure drop (bar)')
@@ -162,4 +173,12 @@ figure
 plot(d_pipe*100,1e-5*max_deltaP)
 xlabel('pipe diameter (cm)')
 ylabel('pressure drop (bar)')
+title('Maximum Total Pressure Drop')
+
+%% cavitation index, worst case as func of pipe ID
+min_cavIndex = min(cavIndex,[],1);
+figure
+plot(d_pipe*100,min_cavIndex)
+xlabel('pipe diameter (cm)')
+ylabel('cavitation index')
 title('Maximum Total Pressure Drop')
