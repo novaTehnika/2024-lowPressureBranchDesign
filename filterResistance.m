@@ -36,7 +36,8 @@ legend('linear','makima','linear, exp','makima, exp','data')
 
 %% Shelco High flow filters
 
-flow_ShelcoHFC5u = [0
+% 5um filters, 60"
+flow_ShelcoHFC5u60in = [0
 102.857142857143
 202.285714285714
 300
@@ -44,7 +45,7 @@ flow_ShelcoHFC5u = [0
 497.142857142857
 589.714285714285]/15850.3; % [(gpm) -> m^3/s]
 
-pdiff_ShelcoHFC5u = [0
+pdiff_ShelcoHFC5u60in = [0
 0.264350453172205
 0.876132930513595
 1.63141993957704
@@ -52,14 +53,21 @@ pdiff_ShelcoHFC5u = [0
 3.74622356495468
 5]*6894.757; % [(psi) -> Pa]
 
-flow_interp = linspace(0, 600, 1e3);
-pdiff_interp = interp1(flow_ShelcoHFC5u,pdiff_ShelcoHFC5u,flow_interp,'spline')
+flow_interp = linspace(0,max(flow_ShelcoHFC5u60in), 1e3);
+pdiff_interp = interp1(flow_ShelcoHFC5u60in,pdiff_ShelcoHFC5u60in,flow_interp,'spline');
 
 figure
 
-plot(flow_interp,pdiff_interp)
+plot(flow_interp,1e-6*pdiff_interp)
 hold on
-scatter(flow_gpm,pdiff_ShelcoHFC5u);
+scatter(flow_ShelcoHFC5u60in,1e-6*pdiff_ShelcoHFC5u60in);
+
+%% Shelco High Flow Multi-Cartridge Housings (3, 4, 7, or 12 cartridges)
+R_6F = 0.00450839456109;
+R_8F = 0.001718715182745;
+R_10F = 0.001170833178906;
+R_12F = 0.000673426200783;
+
 
 %%
 rho = 1000;
@@ -77,19 +85,32 @@ A_N = pi/4*d_N^2;
 k_enteranceFlush = 0.5;
 k_exitFlush = 1;
 
-N = 1:20;
-dp_filter = zeros(numel(N),1);
-dp_minor = zeros(numel(N),1);
-dp_total = zeros(numel(N),1);
-for iN = 1:numel(N)
-    dp_filter(iN) = R_10*q/N(iN);
-    dp_minor(iN) = rho/2*(k_exitFlush*(q/A_1)^2 + k_enteranceFlush*(q/N(iN)/A_N)^2);
-    dp_total(iN) = dp_minor(iN) + dp_filter(iN);
+N_cart = [3,4,7,12];
+N_housing = 1:5;
+dp_filter = zeros(numel(N_cart),numel(N_housing));
+dp_housing = zeros(numel(N_cart),numel(N_housing));
+dp_minor = zeros(numel(N_cart),numel(N_housing));
+dp_total = zeros(numel(N_cart),numel(N_housing));
+for i = 1:numel(N_cart)
+    for j = 1:numel(N_housing)
+        dp_filter(i,j) = interp1(flow_ShelcoHFC5u60in, ...
+                                 pdiff_ShelcoHFC5u60in, ...
+                                 q/N_housing(j)/N_cart(i),'spline');
+        if q/N_housing(j)/N_cart(i) > 500/15850.3
+            dp_filter(i,j) = NaN;
+        end
+        dp_housing(i,j) = R_12F*q/N_housing(j);
+        % dp_minor(i,j) = rho/2*(k_exitFlush*(q/A_1)^2 + k_enteranceFlush*(q/N(iN)/A_N)^2);
+        dp_total(i,j) = dp_minor(i,j) + dp_filter(i,j) + dp_housing(i,j);
+    end
 end
 
 figure
-semilogy([],[])
 hold on
-scatter(N,1e-6*dp_filter,100,'kx','LineWidth',2)
-scatter(N,1e-6*dp_minor,100,'ks','LineWidth',2)
-scatter(N,1e-6*dp_total,100,'r^','LineWidth',2)
+for j = 1:numel(N_housing) 
+    scatter(N_cart,1e-5*dp_total(:,j),100,'LineWidth',2)
+    hold on
+    leg(j) = {[num2str(N_housing(j)),' housings']};
+end
+ylabel("pressure loss (bar)")
+legend(leg)
