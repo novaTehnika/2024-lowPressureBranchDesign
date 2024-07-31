@@ -1,5 +1,5 @@
 %% Shelco string wound filters
-
+if 0
 filtSize = [3
 5
 10
@@ -32,7 +32,7 @@ loglog(filtSizeInterp,Rinterp_makimaExp)
 scatter(filtSize,R);
 
 legend('linear','makima','linear, exp','makima, exp','data')
-
+end
 
 %% Shelco High flow filters
 
@@ -63,10 +63,10 @@ hold on
 scatter(flow_ShelcoHFC5u60in,1e-6*pdiff_ShelcoHFC5u60in);
 
 %% Shelco High Flow Multi-Cartridge Housings (3, 4, 7, or 12 cartridges)
-R_6F = 0.00450839456109;
-R_8F = 0.001718715182745;
-R_10F = 0.001170833178906;
-R_12F = 0.000673426200783;
+R_6F = 0.00450839456109*6894.757*15850.3; % [(psi/gpm) -> Pa/(m^3/s)]
+R_8F = 0.001718715182745*6894.757*15850.3; % [(psi/gpm) -> Pa/(m^3/s)]
+R_10F = 0.001170833178906*6894.757*15850.3; % [(psi/gpm) -> Pa/(m^3/s)]
+R_12F = 0.000673426200783*6894.757*15850.3; % [(psi/gpm) -> Pa/(m^3/s)]
 
 
 %%
@@ -74,7 +74,7 @@ rho = 1000;
 D = 0.23;
 theta_dot = 1; % [rad/s]
 q = D*theta_dot; % [m^3/s]
-R_10 = (R(3))*6894.757*15850.3; % [(psi/gpm) -> Pa/(m^3/s)]
+%R_10 = (R(3))*6894.757*15850.3; % [(psi/gpm) -> Pa/(m^3/s)]
 d_1 = 0.2; % [m]
 A_1 = pi/4*d_1^2;
 
@@ -105,12 +105,45 @@ for i = 1:numel(N_cart)
     end
 end
 
+%%
+
 figure
-hold on
+subplot(2,1,1)
 for j = 1:numel(N_housing) 
     scatter(N_cart,1e-5*dp_total(:,j),100,'LineWidth',2)
     hold on
     leg(j) = {[num2str(N_housing(j)),' housings']};
 end
 ylabel("pressure loss (bar)")
+xlabel('cartridges per housing')
 legend(leg)
+
+subplot(2,1,2)
+hold on
+for j = 1:numel(N_housing) 
+    scatter(N_cart.*N_housing(j),1e-5*dp_total(:,j),100,'LineWidth',2)
+    hold on
+    leg(j) = {[num2str(N_housing(j)),' housings']};
+end
+ylabel("pressure loss (bar)")
+xlabel('total cartridges')
+legend(leg)
+
+figure
+subplot(2,1,1)
+scatter(N_housing,1e-5*dp_housing(1,:),100,'LineWidth',2)
+ylabel("pressure loss (bar)")
+xlabel('number of housings')
+title('Housing Losses')
+
+subplot(2,1,2)
+hold on
+for j = 1:numel(N_housing) 
+    scatter(N_cart.*N_housing(j),1e-5*dp_filter(:,j),100,'LineWidth',2)
+    hold on
+    leg(j) = {[num2str(N_housing(j)),' housings']};
+end
+ylabel("pressure loss (bar)")
+xlabel('total cartridges')
+legend(leg)
+title('Filter Losses')
